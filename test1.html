@@ -1,0 +1,1101 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<meta name="theme-color" content="#d5e8eb">
+	<title>Window Seat | A Tiny Flight Sim</title>
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
+	<style>
+		:root {
+			color-scheme: light;
+			--ink: #19343a;
+			--muted: #6a8181;
+			--paper: #f8f6ef;
+			--line: rgba(25, 52, 58, .13);
+			--teal: #287b77;
+			--coral: #e8795e;
+		}
+
+		* { box-sizing: border-box; }
+		html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+		body { color: var(--ink); background: #c8e0e4; font-family: 'DM Sans', sans-serif; }
+		button, input { font: inherit; }
+		button { color: inherit; }
+		#scene { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+
+		.topbar {
+			position: fixed;
+			z-index: 2;
+			top: 0;
+			left: 0;
+			display: flex;
+			width: 100%;
+			align-items: flex-start;
+			justify-content: space-between;
+			padding: 25px 30px;
+			pointer-events: none;
+		}
+
+		.brand, .flight-chip { pointer-events: auto; }
+		.brand { display: flex; align-items: center; gap: 12px; }
+		.brand-mark {
+			display: grid;
+			width: 39px;
+			height: 39px;
+			place-items: center;
+			border-radius: 50%;
+			color: var(--paper);
+			background: var(--teal);
+			font-size: 18px;
+		}
+		.brand-name { font-family: 'Manrope', sans-serif; font-size: 16px; font-weight: 800; }
+		.brand-sub { margin-top: 2px; color: var(--muted); font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: .08em; text-transform: uppercase; }
+		.flight-chip {
+			display: flex;
+			align-items: center;
+			gap: 11px;
+			padding: 11px 15px;
+			border: 1px solid rgba(25, 52, 58, .1);
+			border-radius: 4px;
+			background: rgba(248, 246, 239, .9);
+			box-shadow: 0 8px 30px rgba(30, 62, 65, .07);
+			font-family: 'DM Mono', monospace;
+			font-size: 10px;
+			letter-spacing: .06em;
+		}
+		.flight-dot { width: 7px; height: 7px; border-radius: 50%; background: #5d9e76; box-shadow: 0 0 0 3px rgba(93, 158, 118, .14); }
+
+		.window-label {
+			position: fixed;
+			z-index: 1;
+			top: 112px;
+			left: 50%;
+			padding: 8px 12px;
+			transform: translateX(-50%);
+			border: 1px solid rgba(255,255,255,.55);
+			border-radius: 3px;
+			color: #fff;
+			background: rgba(25, 52, 58, .2);
+			backdrop-filter: blur(8px);
+			font-family: 'DM Mono', monospace;
+			font-size: 9px;
+			letter-spacing: .12em;
+			text-transform: uppercase;
+			white-space: nowrap;
+			pointer-events: none;
+		}
+
+		.control-dock {
+			position: fixed;
+			z-index: 2;
+			right: 24px;
+			bottom: 22px;
+			left: 24px;
+			display: grid;
+			grid-template-columns: 1.05fr 1fr 1.15fr 1fr auto;
+			align-items: stretch;
+			border: 1px solid rgba(25, 52, 58, .12);
+			border-radius: 5px;
+			background: rgba(248, 246, 239, .96);
+			box-shadow: 0 18px 60px rgba(25, 52, 58, .17);
+			backdrop-filter: blur(18px);
+		}
+
+		.control-group { min-width: 0; padding: 14px 17px 15px; border-right: 1px solid var(--line); }
+		.control-title { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; color: var(--muted); font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: .09em; text-transform: uppercase; }
+		.control-value { color: var(--ink); font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0; text-transform: none; white-space: nowrap; }
+		.segmented { display: flex; gap: 4px; }
+		.segment {
+			min-width: 0;
+			min-height: 32px;
+			flex: 1;
+			padding: 0 8px;
+			border: 1px solid transparent;
+			border-radius: 3px;
+			color: var(--muted);
+			background: transparent;
+			font-size: 11px;
+			cursor: pointer;
+			transition: color 150ms ease, background 150ms ease, border-color 150ms ease;
+		}
+		.segment:hover { color: var(--ink); background: #eeede5; }
+		.segment[aria-pressed="true"] { border-color: rgba(40,123,119,.17); color: #1e6662; background: #e1eeea; font-weight: 700; }
+
+		.range-wrap { display: flex; align-items: center; gap: 10px; }
+		input[type="range"] { width: 100%; height: 4px; margin: 7px 0; accent-color: var(--teal); cursor: ew-resize; }
+		.range-end { color: #8a9997; font-family: 'DM Mono', monospace; font-size: 9px; }
+
+		.toggle-group { display: flex; flex-direction: column; justify-content: center; border-right: 0; }
+		.toggle-row { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+		.toggle-row input { position: absolute; opacity: 0; }
+		.switch { position: relative; width: 36px; height: 21px; flex: 0 0 auto; border: 1px solid #c5cfca; border-radius: 20px; background: #e6e7df; transition: background 160ms ease; }
+		.switch::after { position: absolute; top: 3px; left: 3px; width: 13px; height: 13px; border-radius: 50%; background: white; box-shadow: 0 1px 3px rgba(0,0,0,.18); content: ''; transition: transform 160ms ease; }
+		.toggle-row input:checked + .switch { border-color: var(--teal); background: var(--teal); }
+		.toggle-row input:checked + .switch::after { transform: translateX(15px); }
+		.toggle-row input:focus-visible + .switch { outline: 2px solid var(--coral); outline-offset: 3px; }
+		.toggle-text { font-size: 11px; font-weight: 600; }
+		.toggle-hint { display: block; margin-top: 3px; color: var(--muted); font-size: 9px; font-weight: 400; }
+		.passenger-button {
+			margin-top: 10px;
+			padding: 7px 9px;
+			border: 1px solid rgba(40,123,119,.22);
+			border-radius: 3px;
+			color: #1e6662;
+			background: #e1eeea;
+			font-family: 'DM Mono', monospace;
+			font-size: 9px;
+			letter-spacing: .04em;
+			cursor: pointer;
+		}
+		.passenger-button:hover { background: #d5e8e2; }
+		.passenger-button:disabled { cursor: default; opacity: .62; }
+
+		.caption {
+			position: fixed;
+			right: 30px;
+			bottom: 125px;
+			color: rgba(25, 52, 58, .64);
+			font-family: 'DM Mono', monospace;
+			font-size: 9px;
+			letter-spacing: .08em;
+			text-transform: uppercase;
+			pointer-events: none;
+		}
+
+		@media (max-width: 900px) {
+			.control-dock { right: 14px; bottom: 14px; left: 14px; grid-template-columns: 1fr 1fr; }
+			.control-group { padding: 11px 13px; }
+			.control-group:nth-child(2n) { border-right: 0; }
+			.control-group:nth-child(n+3) { border-top: 1px solid var(--line); }
+			.toggle-group { grid-column: 1 / -1; min-height: 57px; border-top: 1px solid var(--line); }
+			.caption { right: 19px; bottom: 270px; }
+		}
+
+		@media (max-width: 520px) {
+			.topbar { padding: 15px; }
+			.brand-mark { width: 34px; height: 34px; }
+			.brand-name { font-size: 14px; }
+			.brand-sub { font-size: 8px; }
+			.flight-chip { gap: 8px; padding: 9px; font-size: 8px; }
+			.window-label { top: 76px; font-size: 8px; }
+			.control-dock { grid-template-columns: 1fr 1fr; }
+			.control-group { padding: 9px 10px 10px; }
+			.control-title { margin-bottom: 6px; font-size: 8px; }
+			.segment { min-height: 29px; padding: 0 4px; font-size: 10px; }
+			.caption { bottom: 260px; font-size: 8px; }
+		}
+
+		@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: .01ms !important; } }
+	</style>
+	<script type="importmap">
+		{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js" } }
+	</script>
+</head>
+<body>
+	<canvas id="scene" aria-label="A 3D view from inside an airplane cabin"></canvas>
+	<header class="topbar">
+		<div class="brand">
+			<div class="brand-mark" aria-hidden="true">↗</div>
+			<div><div class="brand-name">Window Seat</div><div class="brand-sub">A tiny flight sim</div></div>
+		</div>
+		<div class="flight-chip"><span class="flight-dot"></span><span>FLIGHT 072</span><span aria-hidden="true">/</span><span id="flight-status">CRUISING</span></div>
+	</header>
+	<div class="window-label"><span id="view-label">PACIFIC COAST</span>&nbsp; / &nbsp;WINDOW VIEW</div>
+	<div class="caption">Somewhere above the ordinary</div>
+
+	<section class="control-dock" aria-label="Flight and scenery controls">
+		<div class="control-group">
+			<div class="control-title">Route</div>
+			<div class="segmented" role="group" aria-label="Choose a route">
+				<button class="segment" data-route="coast" aria-pressed="true">Coast</button>
+				<button class="segment" data-route="peaks" aria-pressed="false">Peaks</button>
+				<button class="segment" data-route="city" aria-pressed="false">City</button>
+			</div>
+		</div>
+		<div class="control-group">
+			<div class="control-title">Weather</div>
+			<div class="segmented" role="group" aria-label="Choose the weather">
+				<button class="segment" data-weather="clear" aria-pressed="true">Clear</button>
+				<button class="segment" data-weather="clouds" aria-pressed="false">Clouds</button>
+				<button class="segment" data-weather="storm" aria-pressed="false">Storm</button>
+			</div>
+		</div>
+		<div class="control-group">
+			<label class="control-title" for="altitude"><span>Altitude</span><span class="control-value"><span id="altitude-value">28,000</span> FT</span></label>
+			<div class="range-wrap"><span class="range-end">LOW</span><input id="altitude" type="range" min="5000" max="42000" step="1000" value="28000" aria-label="Flight altitude"><span class="range-end">HIGH</span></div>
+		</div>
+		<div class="control-group">
+			<div class="control-title">Time of day</div>
+			<div class="segmented" role="group" aria-label="Choose time of day">
+				<button class="segment" data-time="dawn" aria-pressed="false">Dawn</button>
+				<button class="segment" data-time="day" aria-pressed="true">Day</button>
+				<button class="segment" data-time="dusk" aria-pressed="false">Dusk</button>
+				<button class="segment" data-time="night" aria-pressed="false">Night</button>
+			</div>
+		</div>
+		<div class="control-group toggle-group">
+			<label class="toggle-row" for="turbulence">
+				<input id="turbulence" type="checkbox">
+				<span class="switch" aria-hidden="true"></span>
+				<span class="toggle-text">Turbulence<span class="toggle-hint">Expect a bumpy ride</span></span>
+			</label>
+			<button id="passenger-action" class="passenger-button" type="button">STAND &amp; WALK AWAY</button>
+		</div>
+	</section>
+
+	<script type="module">
+		import * as THREE from 'three';
+
+		const canvas = document.querySelector('#scene');
+		const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+		renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+		renderer.setSize(window.innerWidth, window.innerHeight);
+		renderer.shadowMap.enabled = true;
+		renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+		renderer.outputColorSpace = THREE.SRGBColorSpace;
+		renderer.toneMapping = THREE.ACESFilmicToneMapping;
+		renderer.toneMappingExposure = 1.12;
+
+		const scene = new THREE.Scene();
+		scene.background = new THREE.Color('#287ca5');
+		const camera = new THREE.PerspectiveCamera(51, window.innerWidth / window.innerHeight, .1, 180);
+		camera.position.set(-.75, 1.48, -4.1);
+		camera.lookAt(3.2, 1.8, 0);
+
+		const ambient = new THREE.HemisphereLight('#fff7e8', '#657d79', 2.05);
+		scene.add(ambient);
+		const sunLight = new THREE.DirectionalLight('#fff0d4', 3.2);
+		sunLight.position.set(5, 9, -5);
+		sunLight.castShadow = true;
+		scene.add(sunLight);
+
+		const mat = (color, roughness = .84, metalness = 0) => new THREE.MeshStandardMaterial({ color, roughness, metalness });
+		const cabin = new THREE.Group();
+		scene.add(cabin);
+		const wallMat = mat('#e9e5d9');
+		const trimMat = mat('#fff9ed', .56);
+		const floorMat = mat('#b4a995');
+		const seatMat = mat('#334c55', .6, .08);
+		const seatSideMat = mat('#263b43', .64, .08);
+		const seatAccentMat = mat('#b89b68', .42, .28);
+		const darkMat = mat('#263d3e', .45);
+
+		function box(parent, size, position, material, castShadow = false, receiveShadow = false) {
+			const mesh = new THREE.Mesh(new THREE.BoxGeometry(...size), material);
+			mesh.position.set(...position);
+			mesh.castShadow = castShadow;
+			mesh.receiveShadow = receiveShadow;
+			parent.add(mesh);
+			return mesh;
+		}
+
+		function traceRoundedRect(path, width, height, radius, centerX = 0, centerY = 0, clockwise = false) {
+			const left = centerX - width / 2;
+			const right = centerX + width / 2;
+			const bottom = centerY - height / 2;
+			const top = centerY + height / 2;
+			if (clockwise) {
+				path.moveTo(left + radius, bottom);
+				path.quadraticCurveTo(left, bottom, left, bottom + radius);
+				path.lineTo(left, top - radius);
+				path.quadraticCurveTo(left, top, left + radius, top);
+				path.lineTo(right - radius, top);
+				path.quadraticCurveTo(right, top, right, top - radius);
+				path.lineTo(right, bottom + radius);
+				path.quadraticCurveTo(right, bottom, right - radius, bottom);
+			} else {
+				path.moveTo(left + radius, bottom);
+				path.lineTo(right - radius, bottom);
+				path.quadraticCurveTo(right, bottom, right, bottom + radius);
+				path.lineTo(right, top - radius);
+				path.quadraticCurveTo(right, top, right - radius, top);
+				path.lineTo(left + radius, top);
+				path.quadraticCurveTo(left, top, left, top - radius);
+				path.lineTo(left, bottom + radius);
+				path.quadraticCurveTo(left, bottom, left + radius, bottom);
+			}
+			path.closePath();
+		}
+
+		function roundedRectShape(width, height, radius) {
+			const shape = new THREE.Shape();
+			traceRoundedRect(shape, width, height, radius);
+			return shape;
+		}
+
+		box(cabin, [5.3, .16, 10], [0, -.08, 0], floorMat, false, true);
+		box(cabin, [5.3, .12, 10], [0, 3.55, 0], wallMat);
+		box(cabin, [.12, 3.55, 10], [-2.65, 1.7, 0], wallMat);
+		const frontWallShape = new THREE.Shape();
+		frontWallShape.moveTo(-2.65, 0);
+		frontWallShape.lineTo(2.65, 0);
+		frontWallShape.lineTo(2.65, 3.55);
+		frontWallShape.lineTo(-2.65, 3.55);
+		frontWallShape.closePath();
+		const doorway = new THREE.Path();
+		traceRoundedRect(doorway, 1.35, 2.5, .18, 0, 1.35, true);
+		frontWallShape.holes.push(doorway);
+		const frontWall = new THREE.Mesh(new THREE.ExtrudeGeometry(frontWallShape, { depth: .16, bevelEnabled: false }), wallMat);
+		frontWall.position.set(0, 0, 4.84);
+		cabin.add(frontWall);
+		const doorHinge = new THREE.Group();
+		doorHinge.position.set(-.675, 0, 4.78);
+		cabin.add(doorHinge);
+		box(doorHinge, [1.35, 2.5, .05], [.675, 1.35, 0], mat('#d8d5ca'), false, true);
+		box(doorHinge, [.09, 2.62, .06], [0, 1.35, -.03], trimMat);
+		box(doorHinge, [.09, 2.62, .06], [1.35, 1.35, -.03], trimMat);
+		box(doorHinge, [1.5, .09, .06], [.675, 2.66, -.03], trimMat);
+		box(doorHinge, [.1, .12, .07], [1.08, 1.36, -.08], darkMat);
+		box(doorHinge, [.56, .16, .05], [.675, 2.58, -.05], mat('#ad5b4b'));
+		const doorState = { open: 0, target: 0 };
+		function updateDoor(delta) {
+			doorState.open += (doorState.target - doorState.open) * (1 - Math.exp(-delta * 4));
+			doorHinge.rotation.y = -doorState.open * Math.PI / 2;
+		}
+		const exitCabin = new THREE.Group();
+		cabin.add(exitCabin);
+		box(exitCabin, [5.3, .16, 5], [0, -.08, 7.35], floorMat, false, true);
+		box(exitCabin, [5.3, .12, 5], [0, 3.55, 7.35], wallMat);
+		box(exitCabin, [.12, 3.55, 5], [-2.65, 1.7, 7.35], wallMat);
+		box(exitCabin, [.12, 3.55, 5], [2.65, 1.7, 7.35], wallMat);
+		box(exitCabin, [5.3, 3.55, .16], [0, 1.7, 9.86], wallMat);
+		box(exitCabin, [3.7, .08, .04], [0, 2.92, 5.5], trimMat);
+		const windowCenters = [-3.8, -1.9, 0, 1.9, 3.8];
+		const rightWallShape = new THREE.Shape();
+		rightWallShape.moveTo(-5, 0);
+		rightWallShape.lineTo(5, 0);
+		rightWallShape.lineTo(5, 3.55);
+		rightWallShape.lineTo(-5, 3.55);
+		rightWallShape.closePath();
+		for (const center of windowCenters) {
+			const opening = new THREE.Path();
+			traceRoundedRect(opening, 1.1, 1.42, .42, -center, 1.85, true);
+			rightWallShape.holes.push(opening);
+		}
+		const rightWallMaterial = new THREE.MeshStandardMaterial({ color: '#e9e5d9', roughness: .84, side: THREE.DoubleSide });
+		const rightWall = new THREE.Mesh(new THREE.ExtrudeGeometry(rightWallShape, { depth: .12, bevelEnabled: false, curveSegments: 12 }), rightWallMaterial);
+		rightWall.position.set(2.59, 0, 0);
+		rightWall.rotation.y = Math.PI / 2;
+		cabin.add(rightWall);
+
+		const windowTrimMaterial = new THREE.MeshStandardMaterial({ color: '#fff9ed', roughness: .58, side: THREE.DoubleSide });
+		const windowGlassMaterial = new THREE.MeshBasicMaterial({ color: '#b8d5d4', transparent: true, opacity: .08, depthWrite: false, side: THREE.DoubleSide });
+		for (const z of windowCenters) {
+			const trimShape = roundedRectShape(1.34, 1.66, .5);
+			const trimOpening = new THREE.Path();
+			traceRoundedRect(trimOpening, 1.06, 1.38, .4, 0, 0, true);
+			trimShape.holes.push(trimOpening);
+			const trim = new THREE.Mesh(new THREE.ShapeGeometry(trimShape), windowTrimMaterial);
+			trim.position.set(2.53, 1.85, z);
+			trim.rotation.y = Math.PI / 2;
+			cabin.add(trim);
+			const glass = new THREE.Mesh(new THREE.ShapeGeometry(roundedRectShape(1.02, 1.34, .38)), windowGlassMaterial);
+			glass.position.set(2.715, 1.85, z);
+			glass.rotation.y = Math.PI / 2;
+			cabin.add(glass);
+		}
+
+		box(cabin, [.14, .1, 10], [2.53, .92, 0], trimMat);
+		box(cabin, [.18, .1, 10], [2.58, 3.42, 0], trimMat);
+
+		function makeSeat(x, z, scale = 1) {
+			const seat = new THREE.Group();
+			seat.position.set(x, 0, z);
+			seat.scale.setScalar(scale);
+			cabin.add(seat);
+			box(seat, [.9, .46, .98], [0, .54, 0], seatMat, true);
+			const back = box(seat, [.92, 1.58, .28], [0, 1.42, .36], seatMat, true);
+			back.rotation.x = -.1;
+			box(seat, [.72, .42, .22], [0, 1.92, .34], seatMat, true);
+			box(seat, [.88, .08, .05], [0, 1.64, .18], seatAccentMat);
+			box(seat, [.48, .34, .05], [0, 1.68, .2], darkMat);
+			box(seat, [.4, .26, .015], [0, 1.68, .168], mat('#73999b', .48));
+			box(seat, [.54, .26, .05], [0, 1.16, .2], trimMat);
+			box(seat, [.11, .035, .02], [0, 1.16, .165], darkMat);
+			box(seat, [.2, .52, 1.02], [-.58, .72, -.02], seatSideMat, true);
+			box(seat, [.2, .52, 1.02], [.58, .72, -.02], seatSideMat, true);
+			box(seat, [.14, .18, .82], [-.64, .88, -.02], seatSideMat, true);
+			box(seat, [.14, .18, .82], [.64, .88, -.02], seatSideMat, true);
+			box(seat, [.08, .04, .78], [-.64, .99, -.02], seatAccentMat);
+			box(seat, [.08, .04, .78], [.64, .99, -.02], seatAccentMat);
+			box(seat, [.32, .05, .32], [0, .2, .07], darkMat);
+			box(seat, [.08, .52, .08], [-.25, .25, .15], darkMat);
+			box(seat, [.08, .52, .08], [.25, .25, .15], darkMat);
+			box(seat, [.7, .12, .5], [0, .14, -.4], seatMat, true);
+			box(seat, [.58, .035, .38], [0, .21, -.41], seatAccentMat);
+			box(seat, [.5, .08, .05], [0, .98, -.42], darkMat);
+			box(seat, [.18, .08, .28], [.73, .91, .04], darkMat);
+			box(seat, [.08, .018, .08], [.73, .958, .04], seatAccentMat);
+			box(seat, [.04, .018, .08], [.84, .958, .04], mat('#9cc8b3', .35));
+			return seat;
+		}
+
+		makeSeat(.25, 1.5, .98);
+		makeSeat(-1.05, 1.5, .98);
+		box(cabin, [4.8, .03, 9.4], [0, .015, 0], mat('#65515a', .96), false, true);
+		const trayTableMat = mat('#6f7777', .42, .24);
+		box(cabin, [.88, .08, .58], [.25, 1.08, -.65], trayTableMat, true, true);
+		box(cabin, [.66, .035, .38], [.25, 1.135, -.65], seatAccentMat);
+		box(cabin, [.12, .82, .12], [.25, .61, -.65], trayTableMat, true);
+		box(cabin, [.42, .08, .08], [.25, .18, -.65], trayTableMat, true);
+
+		const passenger = new THREE.Group();
+		passenger.position.set(.25, 0, 1.0);
+		cabin.add(passenger);
+		const passengerBodyMaterial = mat('#20262b', .72);
+		const passengerPantsMaterial = mat('#252b31', .78);
+		const passengerSkinMaterial = mat('#f0c2a3', .82);
+		const passengerHairMaterial = mat('#3a3030', .88);
+		const passengerEyeMaterial = mat('#263d3e', .5);
+		const passengerGloveMaterial = mat('#f4f1e7', .62);
+		const passengerHatMaterial = mat('#171b20', .72);
+		const passengerFaceDetailMaterial = mat('#382b2b', .72);
+		const passengerShirtMaterial = mat('#f4f1e7', .62);
+		const passengerLapelMaterial = mat('#59636a', .58);
+		const passengerParts = {
+			torso: box(passenger, [.42, .72, .3], [0, 1.08, 0], passengerBodyMaterial, true),
+			collar: box(passenger, [.25, .12, .2], [0, 1.47, 0], trimMat, true),
+			shirt: box(passenger, [.22, .42, .035], [0, 1.18, -.16], passengerShirtMaterial, true),
+			leftLapel: box(passenger, [.08, .38, .04], [-.1, 1.25, -.18], passengerLapelMaterial, true),
+			rightLapel: box(passenger, [.08, .38, .04], [.1, 1.25, -.18], passengerLapelMaterial, true),
+			bowTie: box(passenger, [.14, .06, .04], [0, 1.43, -.2], passengerFaceDetailMaterial, true),
+			leftThigh: box(passenger, [.16, .16, .44], [-.14, .72, -.22], passengerPantsMaterial, true),
+			rightThigh: box(passenger, [.16, .16, .44], [.14, .72, -.22], passengerPantsMaterial, true),
+			leftShin: box(passenger, [.14, .36, .14], [-.14, .5, -.44], passengerPantsMaterial, true),
+			rightShin: box(passenger, [.14, .36, .14], [.14, .5, -.44], passengerPantsMaterial, true),
+			leftKnee: box(passenger, [.17, .17, .17], [-.14, .69, -.44], passengerPantsMaterial, true),
+			rightKnee: box(passenger, [.17, .17, .17], [.14, .69, -.44], passengerPantsMaterial, true),
+			leftSock: box(passenger, [.15, .12, .16], [-.14, .22, -.44], passengerGloveMaterial, true),
+			rightSock: box(passenger, [.15, .12, .16], [.14, .22, -.44], passengerGloveMaterial, true),
+			leftFoot: box(passenger, [.16, .14, .3], [-.14, .1, -.58], passengerPantsMaterial, true),
+			rightFoot: box(passenger, [.16, .14, .3], [.14, .1, -.58], passengerPantsMaterial, true),
+			leftArm: box(passenger, [.12, .5, .12], [-.28, 1.12, 0], passengerBodyMaterial, true),
+			rightArm: box(passenger, [.12, .5, .12], [.28, 1.12, 0], passengerBodyMaterial, true),
+			leftHand: new THREE.Mesh(new THREE.SphereGeometry(.075, 10, 8), passengerGloveMaterial),
+			rightHand: new THREE.Mesh(new THREE.SphereGeometry(.075, 10, 8), passengerSkinMaterial),
+			head: new THREE.Mesh(new THREE.SphereGeometry(.22, 16, 12), passengerSkinMaterial),
+			hair: new THREE.Mesh(new THREE.SphereGeometry(.23, 16, 8, 0, Math.PI * 2, 0, Math.PI * .4), passengerHairMaterial),
+			hatBrim: new THREE.Mesh(new THREE.CylinderGeometry(.3, .3, .055, 16), passengerHatMaterial),
+			hatCrown: new THREE.Mesh(new THREE.CylinderGeometry(.2, .23, .28, 16), passengerHatMaterial),
+			leftEye: new THREE.Mesh(new THREE.SphereGeometry(.025, 8, 6), passengerEyeMaterial),
+			rightEye: new THREE.Mesh(new THREE.SphereGeometry(.025, 8, 6), passengerEyeMaterial)
+		};
+		passengerParts.leftHand.position.set(-.28, .84, -.02);
+		passengerParts.rightHand.position.set(.28, .84, -.02);
+		passengerParts.head.position.set(0, 1.75, 0);
+		passengerParts.head.scale.set(.86, 1.12, .94);
+		passengerParts.hair.position.set(0, 1.84, .035);
+		passengerParts.hatBrim.position.set(0, 1.99, 0);
+		passengerParts.hatCrown.position.set(0, 2.12, 0);
+		passenger.add(passengerParts.leftHand, passengerParts.rightHand, passengerParts.head, passengerParts.hair, passengerParts.hatBrim, passengerParts.hatCrown);
+		const faceDetails = new THREE.Group();
+		const curlGroup = new THREE.Group();
+		[[-.2, 1.75], [-.12, 1.85], [.12, 1.85], [.2, 1.75]].forEach(([x, y]) => {
+			const curl = new THREE.Mesh(new THREE.SphereGeometry(.085, 10, 8), passengerHairMaterial);
+			curl.position.set(x, y, .01);
+			curlGroup.add(curl);
+		});
+		[-.16, .16].forEach(x => {
+			const sideCurl = new THREE.Mesh(new THREE.SphereGeometry(.1, 10, 8), passengerHairMaterial);
+			sideCurl.position.set(x, 1.68, .015);
+			curlGroup.add(sideCurl);
+		});
+		const leftCurl = new THREE.Mesh(new THREE.SphereGeometry(.1, 10, 8), passengerHairMaterial);
+		const rightCurl = new THREE.Mesh(new THREE.SphereGeometry(.1, 10, 8), passengerHairMaterial);
+		const nose = new THREE.Mesh(new THREE.ConeGeometry(.05, .18, 8), passengerSkinMaterial);
+		const mouth = box(faceDetails, [.12, .025, .025], [0, -.07, -.225], passengerFaceDetailMaterial);
+		const leftBrow = box(faceDetails, [.07, .025, .025], [-.075, .08, -.22], passengerFaceDetailMaterial);
+		const rightBrow = box(faceDetails, [.07, .025, .025], [.075, .08, -.22], passengerFaceDetailMaterial);
+		leftCurl.position.set(-.2, -.01, -.02);
+		rightCurl.position.set(.2, -.01, -.02);
+		nose.position.set(0, -.02, -.23);
+		nose.rotation.x = -Math.PI / 2;
+		passengerParts.leftEye.position.set(-.075, .02, -.205);
+		passengerParts.rightEye.position.set(.075, .02, -.205);
+		faceDetails.add(leftCurl, rightCurl, nose, passengerParts.leftEye, passengerParts.rightEye);
+		faceDetails.position.set(0, 1.75, 0);
+		passenger.add(faceDetails, curlGroup);
+		Object.values(passengerParts).forEach(part => { part.castShadow = true; });
+		const passengerState = { mode: 'seated', progress: 0, walkTime: 0, annoyed: false, annoyedAmount: 0, clickStage: 0, faceTimer: 0, pauseTimer: 0 };
+		function updatePassengerEyes(headShiftY, angle) {
+			passengerParts.leftEye.position.set(-.075, .02, -.205);
+			passengerParts.rightEye.position.set(.075, .02, -.205);
+		}
+
+		function updatePassenger(delta) {
+			if (passengerState.mode === 'seated' || passengerState.mode === 'gone') {
+				if (passengerState.mode === 'seated' && passengerState.faceTimer > 0) {
+					passengerState.faceTimer -= delta;
+					if (passengerState.faceTimer <= 0 && passengerState.clickStage === 1) {
+						passengerState.annoyed = false;
+						document.querySelector('#passenger-action').textContent = 'STAND & WALK AWAY';
+					}
+				}
+				const annoyedTarget = passengerState.annoyed ? 1 : 0;
+				passengerState.annoyedAmount += (annoyedTarget - passengerState.annoyedAmount) * (1 - Math.exp(-delta * 5));
+				faceDetails.rotation.y = passengerState.annoyedAmount * .48;
+				leftBrow.rotation.z = -passengerState.annoyedAmount * .38;
+				rightBrow.rotation.z = passengerState.annoyedAmount * .38;
+				updatePassengerEyes(0, passengerState.annoyedAmount * .48);
+				return;
+			}
+			const isPausedApproach = passengerState.mode === 'approachPause';
+			if (!isPausedApproach) passengerState.progress = Math.min(1, passengerState.progress + delta / 8);
+			if (isPausedApproach) {
+				passengerState.pauseTimer -= delta;
+				if (passengerState.pauseTimer <= 0) {
+					passengerState.mode = 'approachReturning';
+					passengerState.progress = 0;
+				}
+			}
+			const journey = ['leaving', 'approaching', 'approachPause', 'windowExit'].includes(passengerState.mode) ? passengerState.progress : 1 - passengerState.progress;
+			const standProgress = Math.min(1, journey / .38);
+			const turnProgress = Math.min(1, Math.max(0, (journey - .38) / .17));
+			const isApproach = ['approaching', 'approachPause', 'approachReturning'].includes(passengerState.mode);
+			const walkProgress = isApproach
+				? Math.min(1, Math.max(0, (journey - .42) / .58))
+				: Math.min(1, Math.max(0, (journey - .55) / .45));
+			const easedStand = 1 - Math.pow(1 - standProgress, 3);
+			const easedTurn = 1 - Math.pow(1 - turnProgress, 3);
+			const easedWalk = 1 - Math.pow(1 - walkProgress, 3);
+			const lift = (from, to) => from + (to - from) * easedStand;
+			const bodyShiftY = lift(0, .17);
+			const bodyShiftZ = lift(0, .18);
+			const headShiftY = lift(0, .27);
+			const annoyedTarget = passengerState.annoyed ? 1 : 0;
+			passengerState.annoyedAmount += (annoyedTarget - passengerState.annoyedAmount) * (1 - Math.exp(-delta * 5));
+			const stride = walkProgress > 0 && walkProgress < 1 ? Math.sin(passengerState.walkTime) * .2 * easedWalk : 0;
+			const forwardProgress = Math.min(1, Math.max(0, (easedWalk - .2) / .8));
+			const alignWithDoorProgress = Math.min(1, Math.max(0, (forwardProgress - .42) / .18));
+			const turnTowardDoor = Math.min(1, Math.max(0, (easedWalk - .2) / .12));
+			if (walkProgress > 0 && walkProgress < 1) passengerState.walkTime += delta * 7;
+			const leavingClearance = Math.min(1, passengerState.progress / .18);
+			const returningLane = Math.min(1, Math.max(0, (.42 - forwardProgress) / .42));
+			const approachDistance = Math.min(1, Math.max(0, (journey - .42) / .58));
+			const windowProgress = Math.min(1, Math.max(0, (journey - .38) / .62));
+			const beforeTableZ = -.02;
+			if (['approaching', 'approachPause', 'approachReturning'].includes(passengerState.mode)) {
+				passenger.position.x = .25;
+				passenger.position.z = 1.0 + (beforeTableZ - 1.0) * approachDistance;
+				passenger.rotation.y = 0;
+			} else if (passengerState.mode === 'windowExit') {
+				const chairClearance = Math.min(1, windowProgress / .3);
+				const windowApproach = Math.max(0, (windowProgress - .3) / .7);
+				const jumpProgress = Math.max(0, (windowProgress - .55) / .45);
+				passenger.position.x = .25 + chairClearance * 1.15 + windowApproach * 1.5;
+				passenger.position.z = 1.0;
+				passenger.position.y = bodyShiftY + Math.sin(Math.PI * jumpProgress) * .85;
+				passenger.rotation.y = -Math.PI / 2 * windowApproach;
+			} else if (passengerState.mode === 'leaving') {
+				passenger.position.x = .25 + leavingClearance * 1.35 - alignWithDoorProgress * 1.35;
+			} else if (journey < .55) {
+				passenger.position.x = .25 + (journey / .55) * 1.35;
+			} else {
+				passenger.position.x = .25 + returningLane * 1.35;
+			}
+			const jumpHeight = passengerState.mode === 'windowExit' ? Math.sin(Math.PI * Math.max(0, (windowProgress - .55) / .45)) * .85 : 0;
+			passenger.position.y = bodyShiftY + jumpHeight;
+			if (!isApproach && passengerState.mode !== 'windowExit') passenger.position.z = 1.0 + forwardProgress * 3.4 + bodyShiftZ;
+			if (!['approaching', 'approachPause', 'approachReturning', 'windowExit'].includes(passengerState.mode)) passenger.rotation.y = passengerState.mode === 'returning' ? 0 : (-Math.PI / 2 * easedTurn * (1 - turnTowardDoor) + Math.PI * turnTowardDoor);
+			doorState.target = ['leaving', 'returning'].includes(passengerState.mode) ? (forwardProgress > (passengerState.mode === 'leaving' ? .62 : .28) ? 1 : 0) : 0;
+			passengerParts.torso.position.y = 1.08;
+			passengerParts.torso.position.z = 0;
+			passengerParts.head.position.y = 1.75 + headShiftY - bodyShiftY;
+			passengerParts.head.position.z = 0;
+			passengerParts.collar.position.y = 1.47;
+			passengerParts.collar.position.z = 0;
+			passengerParts.shirt.position.y = 1.18;
+			passengerParts.shirt.position.z = -.16;
+			passengerParts.leftLapel.position.y = 1.25;
+			passengerParts.leftLapel.position.z = -.18;
+			passengerParts.rightLapel.position.y = 1.25;
+			passengerParts.rightLapel.position.z = -.18;
+			passengerParts.bowTie.position.y = 1.43;
+			passengerParts.bowTie.position.z = -.2;
+			passengerParts.hair.position.y = 1.84 + headShiftY - bodyShiftY;
+			passengerParts.hair.position.z = .035;
+			curlGroup.position.y = headShiftY - bodyShiftY;
+			curlGroup.position.z = 0;
+			passengerParts.hatBrim.position.y = 1.99 + headShiftY - bodyShiftY;
+			passengerParts.hatBrim.position.z = 0;
+			passengerParts.hatCrown.position.y = 2.12 + headShiftY - bodyShiftY;
+			passengerParts.hatCrown.position.z = 0;
+			faceDetails.position.y = 1.75 + headShiftY - bodyShiftY;
+			faceDetails.position.z = 0;
+			const faceTurn = isApproach ? 0 : passengerState.annoyedAmount * .48;
+			faceDetails.rotation.y = faceTurn;
+			leftBrow.rotation.z = -passengerState.annoyedAmount * .38;
+			rightBrow.rotation.z = passengerState.annoyedAmount * .38;
+			[passengerParts.leftThigh, passengerParts.rightThigh].forEach((leg, index) => {
+				leg.position.y = .72;
+				leg.position.z = -.22 + easedStand * .22;
+				leg.rotation.x = -Math.PI / 2 * easedStand + (index ? -stride : stride);
+				leg.position.x = index ? .14 : -.14;
+			});
+			[passengerParts.leftShin, passengerParts.rightShin].forEach((shin, index) => {
+				shin.position.y = lift(.5, .25);
+				shin.position.z = -.44 + easedStand * .44;
+				shin.rotation.x = index ? stride * .45 : -stride * .45;
+				shin.position.x = index ? .14 : -.14;
+			});
+			[passengerParts.leftKnee, passengerParts.rightKnee].forEach((knee, index) => {
+				knee.position.y = lift(.69, .46);
+				knee.position.z = -.44 + easedStand * .44;
+				knee.position.x = index ? .14 : -.14;
+			});
+			[passengerParts.leftSock, passengerParts.rightSock].forEach((sock, index) => {
+				sock.position.y = lift(.22, .03);
+				sock.position.z = -.44 + easedStand * .44;
+				sock.position.x = index ? .14 : -.14;
+			});
+			[passengerParts.leftFoot, passengerParts.rightFoot].forEach((foot, index) => {
+				foot.position.y = lift(.23, -.1);
+				foot.position.z = -.44 + easedStand * .44;
+				foot.rotation.x = index ? stride * .35 : -stride * .35;
+				foot.position.x = index ? .14 : -.14;
+			});
+			[passengerParts.leftArm, passengerParts.rightArm].forEach((arm, index) => {
+				arm.position.y = 1.12;
+				arm.position.z = 0;
+				arm.position.x = index ? .28 : -.28;
+			});
+			[passengerParts.leftHand, passengerParts.rightHand].forEach((hand, index) => {
+				hand.position.y = .84;
+				hand.position.z = -.02;
+				hand.position.x = index ? .28 : -.28;
+			});
+			updatePassengerEyes(headShiftY - bodyShiftY, faceTurn);
+			const actionButton = document.querySelector('#passenger-action');
+			if (passengerState.mode === 'leaving') {
+				if (turnProgress > 0 && walkProgress === 0) actionButton.textContent = 'TURNING LEFT...';
+				if (walkProgress > 0) actionButton.textContent = 'WALKING AWAY...';
+			} else if (passengerState.mode === 'approaching' || passengerState.mode === 'approachPause') {
+				actionButton.textContent = passengerState.mode === 'approachPause' ? 'GIVING YOU A LOOK...' : 'WALKING TOWARD YOU...';
+			} else if (passengerState.mode === 'windowExit') {
+				actionButton.textContent = 'HEADING OUT THE WINDOW...';
+			} else if (passengerState.mode === 'returning') {
+				if (walkProgress > 0) actionButton.textContent = 'WALKING BACK...';
+				if (turnProgress > 0 && walkProgress === 0) actionButton.textContent = 'TURNING TO SEAT...';
+			}
+			if (passengerState.progress === 1 && !isPausedApproach) {
+				if (passengerState.mode === 'leaving') {
+					passenger.visible = false;
+					passengerState.mode = 'gone';
+					actionButton.textContent = 'COME BACK';
+				} else if (passengerState.mode === 'approaching') {
+					passengerState.mode = 'approachPause';
+					passengerState.pauseTimer = 1;
+				} else if (passengerState.mode === 'approachReturning') {
+					passengerState.mode = 'seated';
+					passengerState.annoyed = false;
+					passengerState.clickStage = 2;
+					actionButton.textContent = 'STAND & WALK AWAY';
+				} else if (passengerState.mode === 'windowExit') {
+					passenger.visible = false;
+					passengerState.mode = 'gone';
+					actionButton.textContent = 'PASSENGER LEFT';
+				} else {
+					passengerState.mode = 'seated';
+					actionButton.textContent = 'STAND & WALK AWAY';
+				}
+				actionButton.disabled = false;
+			}
+		}
+
+		const overhead = new THREE.Group();
+		cabin.add(overhead);
+		for (let i = 0; i < 4; i++) {
+			const z = -3.6 + i * 2.4;
+			box(overhead, [1.35, .22, 1.9], [-1.9, 3.1, z], trimMat, false, true);
+			box(overhead, [1.28, .12, 1.82], [-1.9, 2.94, z], wallMat);
+			box(overhead, [.035, .32, 1.72], [-1.2, 3.07, z], wallMat);
+			box(overhead, [.04, .045, .16], [-1.17, 2.92, z], darkMat);
+			box(overhead, [1.45, .42, 2.15], [1.86, 3.08, z], trimMat, false, true);
+			box(overhead, [.035, .3, 1.98], [1.115, 3.08, z], wallMat);
+			box(overhead, [.04, .045, .16], [1.08, 2.93, z], darkMat);
+			box(overhead, [.34, .035, .58], [-.55, 2.87, z], mat('#f7e1b1', .38));
+			box(overhead, [.34, .035, .58], [.55, 2.87, z], mat('#f7e1b1', .38));
+			box(overhead, [.08, .34, .12], [-.55, 3.08, z], wallMat);
+			box(overhead, [.08, .34, .12], [.55, 3.08, z], wallMat);
+		}
+		box(cabin, [.05, .3, 9.5], [2.52, .76, 0], darkMat);
+		box(cabin, [.035, .12, 8.7], [2.49, .96, 0], trimMat);
+
+		const outside = new THREE.Group();
+		scene.add(outside);
+		const skyMaterial = new THREE.ShaderMaterial({
+			uniforms: {
+				topColor: { value: new THREE.Color('#287ca5') },
+				middleColor: { value: new THREE.Color('#57b6cf') },
+				horizonColor: { value: new THREE.Color('#a9dce0') },
+				lowerColor: { value: new THREE.Color('#f6edcf') }
+			},
+			vertexShader: `
+				varying vec3 vSkyDirection;
+				void main() {
+					vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+					vSkyDirection = worldPosition.xyz - cameraPosition;
+					gl_Position = projectionMatrix * viewMatrix * worldPosition;
+				}
+			`,
+			fragmentShader: `
+				uniform vec3 topColor;
+				uniform vec3 middleColor;
+				uniform vec3 horizonColor;
+				uniform vec3 lowerColor;
+				varying vec3 vSkyDirection;
+				void main() {
+					float height = normalize(vSkyDirection).y;
+					float gradient = clamp((height + 0.22) / 1.18, 0.0, 1.0);
+					vec3 color;
+					if (gradient < 0.42) {
+						color = mix(lowerColor, horizonColor, smoothstep(0.0, 0.42, gradient));
+					} else if (gradient < 0.78) {
+						color = mix(horizonColor, middleColor, smoothstep(0.42, 0.78, gradient));
+					} else {
+						color = mix(middleColor, topColor, smoothstep(0.78, 1.0, gradient));
+					}
+					gl_FragColor = vec4(color, 1.0);
+					#include <tonemapping_fragment>
+					#include <colorspace_fragment>
+				}
+			`,
+			depthWrite: false,
+			depthTest: false,
+			toneMapped: false
+		});
+		const skyDome = new THREE.Mesh(new THREE.SphereGeometry(120, 40, 24), skyMaterial);
+		skyDome.renderOrder = -1;
+		scene.add(skyDome);
+
+		const wingShape = new THREE.Shape();
+		wingShape.moveTo(3.1, -2.2);
+		wingShape.lineTo(8.2, -1.55);
+		wingShape.lineTo(13.5, -.52);
+		wingShape.quadraticCurveTo(14.1, 0, 13.5, .52);
+		wingShape.lineTo(8.2, 1.55);
+		wingShape.lineTo(3.1, 2.2);
+		wingShape.closePath();
+		const wingMaterial = new THREE.MeshStandardMaterial({ color: '#c9d0cd', roughness: .54, metalness: .12, side: THREE.DoubleSide });
+		const wing = new THREE.Mesh(new THREE.ShapeGeometry(wingShape), wingMaterial);
+		wing.rotation.x = -Math.PI / 2;
+		wing.position.y = .78;
+		outside.add(wing);
+		box(outside, [2.6, .025, .035], [8.4, .805, 0], mat('#eef1e8', .46, .08));
+
+		const engine = new THREE.Mesh(new THREE.CylinderGeometry(.34, .42, 2.1, 24), mat('#aab5b3', .48, .26));
+		engine.rotation.z = Math.PI / 2;
+		engine.position.set(7.35, .36, 0);
+		outside.add(engine);
+		const engineIntake = new THREE.Mesh(new THREE.CircleGeometry(.31, 24), new THREE.MeshBasicMaterial({ color: '#2d3b3d', side: THREE.DoubleSide }));
+		engineIntake.rotation.y = -Math.PI / 2;
+		engineIntake.position.set(6.28, .36, 0);
+		outside.add(engineIntake);
+		const engineSpinner = new THREE.Mesh(new THREE.ConeGeometry(.11, .28, 16), mat('#c4cbc6', .42, .25));
+		engineSpinner.rotation.z = Math.PI / 2;
+		engineSpinner.position.set(6.1, .36, 0);
+		outside.add(engineSpinner);
+
+		const distantClouds = new THREE.Group();
+		outside.add(distantClouds);
+		const distantCloudMaterial = mat('#e3ebe8', .98);
+		for (let i = 0; i < 12; i++) {
+			const cloud = new THREE.Group();
+			const baseY = .75 + (i % 3) * .35;
+			cloud.position.set(10 + (i % 4) * 2.6, baseY, -20 + i * 3.7);
+			for (let puffIndex = 0; puffIndex < 3; puffIndex++) {
+				const puff = new THREE.Mesh(new THREE.SphereGeometry(.62 + puffIndex % 2 * .18, 14, 10), distantCloudMaterial);
+				puff.scale.set(1.5, .22, .72);
+				puff.position.set((puffIndex - 1) * .8, Math.sin(i + puffIndex) * .08, Math.cos(i * 2 + puffIndex) * .18);
+				cloud.add(puff);
+			}
+			distantClouds.add(cloud);
+		}
+
+		const sunMesh = new THREE.Mesh(new THREE.SphereGeometry(.46, 24, 16), new THREE.MeshBasicMaterial({ color: '#fff1bd', transparent: true, depthWrite: false }));
+		sunMesh.position.set(8.6, 3.15, 1.5);
+		outside.add(sunMesh);
+		const moonMesh = new THREE.Mesh(new THREE.SphereGeometry(.34, 24, 16), new THREE.MeshBasicMaterial({ color: '#eff1e2', transparent: true, opacity: 0, depthWrite: false }));
+		moonMesh.position.set(8.6, 3.25, -1.8);
+		outside.add(moonMesh);
+
+		const starPositions = [];
+		let seed = 47;
+		const random = () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
+		for (let i = 0; i < 100; i++) starPositions.push(8.55, 1.7 + random() * 5.2, -4.7 + random() * 9.4);
+		const starGeometry = new THREE.BufferGeometry();
+		starGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starPositions, 3));
+		const stars = new THREE.Points(starGeometry, new THREE.PointsMaterial({ color: '#fff6d7', size: .055, sizeAttenuation: true, transparent: true, opacity: 0, depthWrite: false }));
+		outside.add(stars);
+
+		const cloudGroup = new THREE.Group();
+		outside.add(cloudGroup);
+		const cloudMaterials = [mat('#fffefa', .98), mat('#f4f5ef', .98), mat('#e4e9e5', .98)];
+		for (let i = 0; i < 21; i++) {
+			const cluster = new THREE.Group();
+			const z = -7 + (i % 7) * 2.2;
+			const x = 6.7 + Math.floor(i / 7) * 1.3;
+			const y = .8 + (i * 7 % 9) * .53;
+			cluster.position.set(x, y, z);
+			const count = 4 + i % 3;
+			for (let j = 0; j < count; j++) {
+				const radius = .43 + ((i + j * 3) % 4) * .16;
+				const puff = new THREE.Mesh(new THREE.SphereGeometry(radius, 12, 9), cloudMaterials[(i + j) % cloudMaterials.length]);
+				puff.scale.y = .48;
+				puff.position.set((j - (count - 1) / 2) * .42, Math.sin(j * 2 + i) * .13, Math.cos(j * 3 + i) * .32);
+				cluster.add(puff);
+			}
+			cloudGroup.add(cluster);
+		}
+
+		const terrain = new THREE.Group();
+		outside.add(terrain);
+		const seaMat = new THREE.MeshStandardMaterial({ color: '#438f9a', roughness: .42, metalness: .12 });
+		const sea = new THREE.Mesh(new THREE.PlaneGeometry(35, 30), seaMat);
+		sea.rotation.x = -Math.PI / 2;
+		sea.position.set(10.5, -.35, 0);
+		terrain.add(sea);
+		const land = new THREE.Mesh(new THREE.PlaneGeometry(35, 16), mat('#b7ad83'));
+		land.rotation.x = -Math.PI / 2;
+		land.position.set(10.5, -.3, 0);
+		terrain.add(land);
+		const terrainObjects = new THREE.Group();
+		terrainObjects.position.x = 12;
+		terrain.add(terrainObjects);
+
+		function clearTerrain() {
+			while (terrainObjects.children.length) {
+				const object = terrainObjects.children.pop();
+				object.geometry?.dispose();
+				if (Array.isArray(object.material)) object.material.forEach(material => material.dispose());
+				else object.material?.dispose();
+			}
+		}
+
+		function setRoute(route) {
+			clearTerrain();
+			sea.visible = route === 'coast';
+			land.visible = route !== 'coast';
+			if (route === 'peaks') {
+				for (let i = 0; i < 9; i++) {
+					const height = 1.7 + ((i * 7) % 5) * .48;
+					const mountain = new THREE.Mesh(new THREE.ConeGeometry(1.7 + (i % 3) * .35, height, 5), mat(i % 2 ? '#778f84' : '#96a497'));
+					mountain.position.set(8.5 + (i % 3) * 1.15, -.3 + height / 2, -5 + i * 1.25);
+					mountain.rotation.y = i * .7;
+					terrainObjects.add(mountain);
+					if (i % 2 === 0) {
+						const snow = new THREE.Mesh(new THREE.ConeGeometry(.55, .64, 5), mat('#f4f1e7'));
+						snow.position.set(mountain.position.x, mountain.position.y + height * .29, mountain.position.z);
+						snow.rotation.y = mountain.rotation.y;
+						terrainObjects.add(snow);
+					}
+				}
+			} else if (route === 'city') {
+				const buildingColors = ['#c17c62', '#d8b386', '#849997', '#e0c6a2'];
+				for (let i = 0; i < 34; i++) {
+					const width = .34 + (i % 3) * .14;
+					const height = .35 + ((i * 11) % 9) * .17;
+					const building = new THREE.Mesh(new THREE.BoxGeometry(width, height, .38 + (i % 4) * .12), mat(buildingColors[i % buildingColors.length]));
+					building.position.set(8.2 + (i % 5) * .42, -.3 + height / 2, -6 + i * .37);
+					terrainObjects.add(building);
+					if (i % 3 === 0) {
+						const roof = new THREE.Mesh(new THREE.BoxGeometry(width * .7, .18, .3), mat('#d6c7aa'));
+						roof.position.set(building.position.x, building.position.y + height / 2 + .08, building.position.z);
+						terrainObjects.add(roof);
+					}
+				}
+			} else {
+				const shore = new THREE.Mesh(new THREE.PlaneGeometry(35, 7), mat('#d2c39b'));
+				shore.rotation.x = -Math.PI / 2;
+				shore.position.set(10.3, -.27, -5.2);
+				terrainObjects.add(shore);
+			}
+			document.querySelector('#view-label').textContent = route === 'coast' ? 'PACIFIC COAST' : route === 'peaks' ? 'HIGH COUNTRY' : 'CITY LIGHTS';
+		}
+
+		const rainPositions = [];
+		for (let i = 0; i < 380; i++) rainPositions.push(7.8 + random() * 2.6, random() * 7, -6 + random() * 12);
+		const rainGeometry = new THREE.BufferGeometry();
+		rainGeometry.setAttribute('position', new THREE.Float32BufferAttribute(rainPositions, 3));
+		const rain = new THREE.Points(rainGeometry, new THREE.PointsMaterial({ color: '#d9e7ea', size: .035, transparent: true, opacity: .7 }));
+		rain.visible = false;
+		outside.add(rain);
+
+		const settings = { route: 'coast', weather: 'clear', time: 'day', altitude: 28000, turbulence: false };
+		const startingAltitude = settings.altitude;
+
+		function updateAltitude() {
+			const progress = (settings.altitude - 5000) / 37000;
+			const altitudeChange = (settings.altitude - startingAltitude) / 37000;
+			cloudGroup.position.y = .55 - progress * 1.45;
+			distantClouds.position.y = -altitudeChange * 2.4;
+			cloudGroup.scale.setScalar(1.08 - progress * .16);
+			terrain.scale.set(1, 1.35 - progress * .57, 1);
+			terrain.position.y = -.12 - progress * .8;
+		}
+
+		const timeColors = {
+			dawn: ['#f3b36c', '#ffd08a', '#ff9968', '#ffe6b5'],
+			day: ['#287ca5', '#57b6cf', '#a9dce0', '#f6edcf'],
+			dusk: ['#263a63', '#805070', '#d46d70', '#ffd0a0'],
+			night: ['#071326', '#112743', '#203852', '#8492a7']
+		};
+		const celestialPositions = {
+			dawn: { sun: [8.6, 1.95, -3.4], moon: [8.6, 3.25, -1.8] },
+			day: { sun: [8.6, 3.15, 1.5], moon: [8.6, 3.25, -1.8] },
+			dusk: { sun: [8.6, 1.95, 3.4], moon: [8.6, 3.25, -1.8] },
+			night: { sun: [8.6, 1.65, 3.4], moon: [8.6, 3.05, -1.8] }
+		};
+		const skyTargets = {
+			background: new THREE.Color(timeColors.day[0]),
+			top: new THREE.Color(timeColors.day[0]),
+			middle: new THREE.Color(timeColors.day[1]),
+			horizon: new THREE.Color(timeColors.day[2]),
+			lower: new THREE.Color(timeColors.day[3]),
+			sunPosition: new THREE.Vector3(...celestialPositions.day.sun),
+			moonPosition: new THREE.Vector3(...celestialPositions.day.moon),
+			sunOpacity: 1,
+			moonOpacity: 0,
+			starsOpacity: 0,
+			sunLightColor: new THREE.Color('#fff0d4'),
+			sunLightIntensity: 3.2,
+			ambientIntensity: 2.05,
+			cloudColors: cloudMaterials.map(material => material.color.clone())
+		};
+
+		function updateSky() {
+			const colors = timeColors[settings.time];
+			skyTargets.background.set(colors[0]);
+			skyTargets.top.set(colors[0]);
+			skyTargets.middle.set(colors[1]);
+			skyTargets.horizon.set(settings.weather === 'storm' ? '#586c7a' : colors[2]);
+			skyTargets.lower.set(settings.weather === 'storm' ? '#354b58' : colors[3]);
+			const isNight = settings.time === 'night';
+			const celestial = celestialPositions[settings.time];
+			skyTargets.sunPosition.set(...celestial.sun);
+			skyTargets.moonPosition.set(...celestial.moon);
+			skyTargets.sunOpacity = isNight ? 0 : 1;
+			skyTargets.moonOpacity = isNight ? 1 : 0;
+			skyTargets.starsOpacity = isNight ? 1 : 0;
+			skyTargets.sunLightColor.set(settings.time === 'dusk' ? '#ffb184' : settings.time === 'dawn' ? '#ffe0ba' : '#fff0d4');
+			skyTargets.sunLightIntensity = isNight ? .22 : settings.weather === 'storm' ? 1.2 : 3.2;
+			skyTargets.ambientIntensity = isNight ? .68 : settings.weather === 'storm' ? 1.15 : 2.05;
+			distantClouds.visible = settings.weather === 'clear';
+			cloudGroup.visible = settings.weather !== 'clear';
+			cloudMaterials.forEach((material, index) => skyTargets.cloudColors[index].set(settings.weather === 'storm' ? ['#50646b', '#63767a', '#748586'][index] : ['#fffefa', '#f4f5ef', '#e4e9e5'][index]));
+			rain.visible = settings.weather === 'storm';
+		}
+		const passengerRaycaster = new THREE.Raycaster();
+		const passengerPointer = new THREE.Vector2();
+		canvas.addEventListener('pointerdown', event => {
+			const bounds = canvas.getBoundingClientRect();
+			passengerPointer.x = ((event.clientX - bounds.left) / bounds.width) * 2 - 1;
+			passengerPointer.y = -((event.clientY - bounds.top) / bounds.height) * 2 + 1;
+			passengerRaycaster.setFromCamera(passengerPointer, camera);
+			if (passengerRaycaster.intersectObjects(passenger.children, true).length && passengerState.mode === 'seated') {
+				if (passengerState.clickStage === 0) {
+					passengerState.clickStage = 1;
+					passengerState.annoyed = true;
+					passengerState.faceTimer = 3;
+					document.querySelector('#passenger-action').textContent = 'GIVING YOU A LOOK';
+				} else if (passengerState.clickStage === 1) {
+					passengerState.mode = 'approaching';
+					passengerState.progress = 0;
+					passengerState.annoyed = true;
+				} else if (passengerState.clickStage === 2) {
+					passengerState.mode = 'windowExit';
+					passengerState.progress = 0;
+					passengerState.annoyed = true;
+				}
+			}
+		});
+
+		document.querySelectorAll('[data-route]').forEach(button => button.addEventListener('click', () => {
+			settings.route = button.dataset.route;
+			document.querySelectorAll('[data-route]').forEach(item => item.setAttribute('aria-pressed', String(item === button)));
+			setRoute(settings.route);
+		}));
+		document.querySelectorAll('[data-weather]').forEach(button => button.addEventListener('click', () => {
+			settings.weather = button.dataset.weather;
+			document.querySelectorAll('[data-weather]').forEach(item => item.setAttribute('aria-pressed', String(item === button)));
+			document.querySelector('#flight-status').textContent = settings.weather === 'storm' ? 'BUMPY AIR' : 'CRUISING';
+			updateSky();
+		}));
+		document.querySelectorAll('[data-time]').forEach(button => button.addEventListener('click', () => {
+			settings.time = button.dataset.time;
+			document.querySelectorAll('[data-time]').forEach(item => item.setAttribute('aria-pressed', String(item === button)));
+			updateSky();
+		}));
+		document.querySelector('#altitude').addEventListener('input', event => {
+			settings.altitude = Number(event.target.value);
+			document.querySelector('#altitude-value').textContent = settings.altitude.toLocaleString('en-US');
+			updateAltitude();
+		});
+		document.querySelector('#turbulence').addEventListener('change', event => {
+			settings.turbulence = event.target.checked;
+			document.querySelector('#flight-status').textContent = settings.turbulence ? 'BUMPY AIR' : settings.weather === 'storm' ? 'BUMPY AIR' : 'CRUISING';
+		});
+		document.querySelector('#passenger-action').addEventListener('click', event => {
+			if (passengerState.mode === 'seated') {
+				passengerState.mode = 'leaving';
+				passengerState.progress = 0;
+				event.currentTarget.textContent = 'STANDING UP...';
+			} else if (passengerState.mode === 'gone') {
+				passengerState.mode = 'returning';
+				passengerState.progress = 0;
+				passenger.visible = true;
+				event.currentTarget.textContent = 'COMING BACK...';
+			}
+			event.currentTarget.disabled = true;
+		});
+
+		setRoute(settings.route);
+		updateAltitude();
+		updateSky();
+
+		const clock = new THREE.Clock();
+		function animate() {
+			requestAnimationFrame(animate);
+			const delta = clock.getDelta();
+			const elapsed = clock.elapsedTime;
+			const skyBlend = 1 - Math.exp(-delta * 2.4);
+			scene.background.lerp(skyTargets.background, skyBlend);
+			skyMaterial.uniforms.topColor.value.lerp(skyTargets.top, skyBlend);
+			skyMaterial.uniforms.middleColor.value.lerp(skyTargets.middle, skyBlend);
+			skyMaterial.uniforms.horizonColor.value.lerp(skyTargets.horizon, skyBlend);
+			skyMaterial.uniforms.lowerColor.value.lerp(skyTargets.lower, skyBlend);
+			sunMesh.position.lerp(skyTargets.sunPosition, skyBlend);
+			moonMesh.position.lerp(skyTargets.moonPosition, skyBlend);
+			sunMesh.material.opacity += (skyTargets.sunOpacity - sunMesh.material.opacity) * skyBlend;
+			moonMesh.material.opacity += (skyTargets.moonOpacity - moonMesh.material.opacity) * skyBlend;
+			stars.material.opacity += (skyTargets.starsOpacity - stars.material.opacity) * skyBlend;
+			sunLight.color.lerp(skyTargets.sunLightColor, skyBlend);
+			sunLight.intensity += (skyTargets.sunLightIntensity - sunLight.intensity) * skyBlend;
+			ambient.intensity += (skyTargets.ambientIntensity - ambient.intensity) * skyBlend;
+			updateDoor(delta);
+			cloudMaterials.forEach((material, index) => material.color.lerp(skyTargets.cloudColors[index], skyBlend));
+			const bump = settings.turbulence || settings.weather === 'storm' ? 1 : 0;
+			camera.position.x = -.75 + (bump ? Math.sin(elapsed * 17) * .018 : Math.sin(elapsed * .55) * .006);
+			camera.position.y = 1.48 + (bump ? Math.sin(elapsed * 14) * .014 : Math.sin(elapsed * .8) * .004);
+			camera.lookAt(3.2, 1.8, 0);
+			cloudGroup.position.x = Math.sin(elapsed * .045) * .22;
+			cloudGroup.position.z = Math.sin(elapsed * .13) * 1.2;
+			distantClouds.position.z = Math.sin(elapsed * .08 + 1.1) * 1.8;
+			updatePassenger(delta);
+			rain.position.y = -(elapsed * 3 % 6);
+			renderer.render(scene, camera);
+		}
+		animate();
+
+		window.addEventListener('resize', () => {
+			camera.aspect = window.innerWidth / window.innerHeight;
+			camera.updateProjectionMatrix();
+			renderer.setSize(window.innerWidth, window.innerHeight);
+			renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+		});
+	</script>
+</body>
+</html>
